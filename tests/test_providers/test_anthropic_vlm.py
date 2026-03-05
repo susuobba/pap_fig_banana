@@ -86,8 +86,12 @@ async def test_generate_with_images_and_json(monkeypatch: pytest.MonkeyPatch) ->
     msg = captured["messages"][0]
     assert msg["role"] == "user"
     content = msg["content"]
-    assert content[0]["type"] == "input_image"
+    assert content[0]["type"] == "image"
     assert content[0]["source"]["data"] == "base64-image-data"
     assert content[-1]["type"] == "text"
     assert content[-1]["text"] == "Hi with image"
-    assert captured["response_format"] == {"type": "json_object"}
+
+    output_config = captured["output_config"]
+    fmt = output_config["format"]
+    assert fmt["type"] == "json_schema"
+    assert isinstance(fmt["schema"], dict)

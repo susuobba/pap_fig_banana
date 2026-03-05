@@ -72,7 +72,7 @@ class AnthropicVLM(VLMProvider):
                 b64 = image_to_base64(img)
                 content.append(
                     {
-                        "type": "input_image",
+                        "type": "image",
                         "source": {
                             "type": "base64",
                             "media_type": "image/png",
@@ -101,8 +101,17 @@ class AnthropicVLM(VLMProvider):
             params["system"] = system_prompt
 
         if response_format == "json":
-            # Constrain the model to emit a JSON object if supported by the SDK.
-            params["response_format"] = {"type": "json_object"}
+            # Use structured outputs with a permissive JSON schema so callers
+            # receive machine-parseable JSON while retaining flexibility.
+            params["output_config"] = {
+                "format": {
+                    "type": "json_schema",
+                    "schema": {
+                        "type": "object",
+                        "additionalProperties": True,
+                    },
+                }
+            }
 
         response = await client.messages.create(**params)
 

@@ -46,7 +46,13 @@ dependencies = [
 google = ["google-genai>=1.65"]
 openai = ["openai>=1.0"]
 bedrock = ["boto3>=1.34"]
-all-providers = ["google-genai>=1.65", "openai>=1.0", "boto3>=1.34"]
+anthropic = ["anthropic>=0.83"]
+all-providers = [
+    "google-genai>=1.65",
+    "openai>=1.0",
+    "boto3>=1.34",
+    "anthropic>=0.83",
+]
 mcp = ["fastmcp>=2.0"]
 dev = [
     "pytest>=8.0",
