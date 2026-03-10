@@ -228,6 +228,14 @@ items:
 
 Paths in the manifest are resolved relative to the manifest file's directory.
 
+**Generate a human-readable report** from an existing batch run (Markdown or HTML):
+
+```bash
+paperbanana batch-report --batch-dir outputs/batch_20250109_123456_abc --format markdown
+# or by batch ID (under default output dir)
+paperbanana batch-report --batch-id batch_20250109_123456_abc --format html --output report.html
+```
+
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--manifest` | `-m` | Path to manifest file (required) |

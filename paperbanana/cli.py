@@ -650,6 +650,68 @@ def batch(
     console.print(f"  Report: [bold]{report_path}[/bold]")
 
 
+@app.command("batch-report")
+def batch_report(
+    batch_dir: Optional[str] = typer.Option(
+        None,
+        "--batch-dir",
+        "-b",
+        help="Path to batch run directory (e.g. outputs/batch_20250109_123456_abc)",
+    ),
+    batch_id: Optional[str] = typer.Option(
+        None,
+        "--batch-id",
+        help="Batch ID (e.g. batch_20250109_123456_abc); resolved under --output-dir",
+    ),
+    output_dir: str = typer.Option(
+        "outputs",
+        "--output-dir",
+        "-o",
+        help="Parent directory for batch runs (used with --batch-id)",
+    ),
+    output: Optional[str] = typer.Option(
+        None,
+        "--output",
+        help="Output path for the report file (default: <batch_dir>/batch_report.<md|html>)",
+    ),
+    format: str = typer.Option(
+        "markdown",
+        "--format",
+        "-f",
+        help="Report format: markdown or html",
+    ),
+):
+    """Generate a human-readable report from an existing batch run (batch_report.json)."""
+    if format not in ("markdown", "html", "md"):
+        console.print(f"[red]Error: Format must be markdown or html. Got: {format}[/red]")
+        raise typer.Exit(1)
+    if batch_dir is None and batch_id is None:
+        console.print("[red]Error: Provide either --batch-dir or --batch-id[/red]")
+        raise typer.Exit(1)
+    if batch_dir is not None and batch_id is not None:
+        console.print("[red]Error: Provide only one of --batch-dir or --batch-id[/red]")
+        raise typer.Exit(1)
+
+    from paperbanana.core.batch import write_batch_report
+
+    if batch_dir is not None:
+        path = Path(batch_dir)
+    else:
+        path = Path(output_dir) / batch_id
+
+    output_path = Path(output) if output else None
+    fmt = "markdown" if format == "md" else format
+    try:
+        written = write_batch_report(path, output_path=output_path, format=fmt)
+        console.print(f"[green]Report written to:[/green] [bold]{written}[/bold]")
+    except FileNotFoundError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+
 @app.command()
 def plot(
     data: str = typer.Option(..., "--data", "-d", help="Path to data file (CSV or JSON)"),
