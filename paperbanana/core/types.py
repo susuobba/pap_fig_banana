@@ -43,6 +43,7 @@ class ReferenceExample(BaseModel):
     image_path: str
     category: Optional[str] = None
     aspect_ratio: Optional[float] = None
+    structure_hints: Optional[dict[str, Any] | list[Any] | str] = None
 
 
 class CritiqueResult(BaseModel):

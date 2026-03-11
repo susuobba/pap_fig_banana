@@ -33,6 +33,13 @@ _API_KEY_HINTS = {
         "  2. Set the environment variable:\n\n"
         "  export OPENAI_API_KEY=your-key-here"
     ),
+    "ANTHROPIC_API_KEY": (
+        "ANTHROPIC_API_KEY not found.\n\n"
+        "To fix this:\n"
+        "  1. Get an API key at: https://console.anthropic.com/settings/keys\n"
+        "  2. Set the environment variable:\n\n"
+        "  export ANTHROPIC_API_KEY=your-key-here"
+    ),
     "AWS_CREDENTIALS": (
         "AWS credentials not found for Bedrock.\n\n"
         "To fix this, configure one of:\n"
@@ -83,7 +90,8 @@ class ProviderRegistry:
 
             return GeminiVLM(
                 api_key=settings.google_api_key,
-                model=settings.vlm_model,
+                model=settings.google_vlm_model or settings.vlm_model,
+                base_url=settings.google_base_url,
             )
         elif provider == "openrouter":
             _validate_api_key(settings.openrouter_api_key, "OPENROUTER_API_KEY")
@@ -111,9 +119,18 @@ class ProviderRegistry:
                 region=settings.aws_region,
                 profile=settings.aws_profile,
             )
+        elif provider == "anthropic":
+            _validate_api_key(settings.anthropic_api_key, "ANTHROPIC_API_KEY")
+            from paperbanana.providers.vlm.anthropic import AnthropicVLM
+
+            return AnthropicVLM(
+                api_key=settings.anthropic_api_key,
+                model=settings.vlm_model,
+            )
         else:
             raise ValueError(
-                f"Unknown VLM provider: {provider}. Available: gemini, openrouter, openai, bedrock"
+                "Unknown VLM provider: "
+                f"{provider}. Available: gemini, openrouter, openai, bedrock, anthropic"
             )
 
     @staticmethod
@@ -128,7 +145,8 @@ class ProviderRegistry:
 
             return GoogleImagenGen(
                 api_key=settings.google_api_key,
-                model=settings.image_model,
+                model=settings.google_image_model or settings.image_model,
+                base_url=settings.google_base_url,
             )
         elif provider == "openrouter_imagen":
             _validate_api_key(settings.openrouter_api_key, "OPENROUTER_API_KEY")

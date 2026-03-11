@@ -16,11 +16,13 @@ from paperbanana.agents.retriever import RetrieverAgent
 from paperbanana.agents.stylist import StylistAgent
 from paperbanana.agents.visualizer import VisualizerAgent
 from paperbanana.core.config import Settings
+from paperbanana.core.prompt_recorder import PromptRecorder
 from paperbanana.core.types import (
     DiagramType,
     GenerationInput,
     GenerationOutput,
     IterationRecord,
+    ReferenceExample,
     RunMetadata,
 )
 from paperbanana.core.utils import (
@@ -34,6 +36,11 @@ from paperbanana.core.utils import (
 from paperbanana.guidelines.methodology import load_methodology_guidelines
 from paperbanana.guidelines.plots import load_plot_guidelines
 from paperbanana.providers.registry import ProviderRegistry
+from paperbanana.reference.exemplar_retrieval import (
+    ExemplarRetrievalError,
+    ExternalExemplarRetriever,
+    map_external_hits_to_examples,
+)
 from paperbanana.reference.store import ReferenceStore
 
 logger = structlog.get_logger()
@@ -111,6 +118,11 @@ class PaperBananaPipeline:
         if self.settings.skip_ssl_verification:
             _apply_ssl_skip()
 
+        # Prompt recorder (writes formatted prompts to outputs/<run_id>/prompts/)
+        self._prompt_recorder = None
+        if self.settings.save_prompts:
+            self._prompt_recorder = PromptRecorder(run_dir_provider=lambda: self._run_dir)
+
         # Initialize providers
         if vlm_client is not None:
             # Demo mode: use provided clients
@@ -124,6 +136,13 @@ class PaperBananaPipeline:
 
         # Load reference store (resolves cache → built-in fallback)
         self.reference_store = ReferenceStore.from_settings(self.settings)
+        self._external_exemplar_retriever: ExternalExemplarRetriever | None = None
+        if self.settings.exemplar_retrieval_enabled and self.settings.exemplar_retrieval_endpoint:
+            self._external_exemplar_retriever = ExternalExemplarRetriever(
+                endpoint=self.settings.exemplar_retrieval_endpoint,
+                timeout_seconds=self.settings.exemplar_retrieval_timeout_seconds,
+                max_retries=self.settings.exemplar_retrieval_max_retries,
+            )
 
         # Load guidelines
         guidelines_path = self.settings.guidelines_path
@@ -132,19 +151,31 @@ class PaperBananaPipeline:
 
         # Initialize agents
         prompt_dir = self._find_prompt_dir()
-        self.optimizer = InputOptimizerAgent(self._vlm, prompt_dir=prompt_dir)
-        self.retriever = RetrieverAgent(self._vlm, prompt_dir=prompt_dir)
-        self.planner = PlannerAgent(self._vlm, prompt_dir=prompt_dir)
+        self.optimizer = InputOptimizerAgent(
+            self._vlm, prompt_dir=prompt_dir, prompt_recorder=self._prompt_recorder
+        )
+        self.retriever = RetrieverAgent(
+            self._vlm, prompt_dir=prompt_dir, prompt_recorder=self._prompt_recorder
+        )
+        self.planner = PlannerAgent(
+            self._vlm, prompt_dir=prompt_dir, prompt_recorder=self._prompt_recorder
+        )
         self.stylist = StylistAgent(
-            self._vlm, guidelines=self._methodology_guidelines, prompt_dir=prompt_dir
+            self._vlm,
+            guidelines=self._methodology_guidelines,
+            prompt_dir=prompt_dir,
+            prompt_recorder=self._prompt_recorder,
         )
         self.visualizer = VisualizerAgent(
             self._image_gen,
             self._vlm,
             prompt_dir=prompt_dir,
             output_dir=str(self._run_dir),
+            prompt_recorder=self._prompt_recorder,
         )
-        self.critic = CriticAgent(self._vlm, prompt_dir=prompt_dir)
+        self.critic = CriticAgent(
+            self._vlm, prompt_dir=prompt_dir, prompt_recorder=self._prompt_recorder
+        )
 
         logger.info(
             "Pipeline initialized",
@@ -161,6 +192,44 @@ class PaperBananaPipeline:
     def _find_prompt_dir(self) -> str:
         """Find the prompts directory relative to the package."""
         return find_prompt_dir()
+
+    async def _resolve_retrieval_candidates(
+        self, input: GenerationInput, candidates: list[ReferenceExample]
+    ) -> tuple[list[ReferenceExample], str, list[str]]:
+        """Resolve candidate pool based on exemplar-retrieval settings."""
+        if not self.settings.exemplar_retrieval_enabled:
+            return candidates, "disabled", []
+
+        if self._external_exemplar_retriever is None:
+            logger.warning(
+                "Exemplar retrieval enabled but endpoint is not configured; "
+                "using baseline retrieval"
+            )
+            return candidates, "fallback_no_endpoint", []
+
+        try:
+            hits = await self._external_exemplar_retriever.retrieve(
+                source_context=input.source_context,
+                caption=input.communicative_intent,
+                diagram_type=input.diagram_type,
+                top_k=self.settings.exemplar_retrieval_top_k,
+            )
+        except ExemplarRetrievalError as e:
+            logger.warning(
+                "External exemplar retrieval failed; using baseline retrieval",
+                error=str(e),
+            )
+            return candidates, "fallback_error", []
+
+        if not hits:
+            logger.warning("External exemplar retrieval returned no hits; using baseline retrieval")
+            return candidates, "fallback_empty", []
+
+        mapped = map_external_hits_to_examples(hits, self.reference_store)
+        mode = self.settings.exemplar_retrieval_mode
+        if mode == "external_only":
+            return mapped, "external_only", [e.id for e in mapped]
+        return mapped, "external_then_rerank", [e.id for e in mapped]
 
     async def generate(self, input: GenerationInput) -> GenerationOutput:
         """Run the full generation pipeline.
@@ -238,22 +307,31 @@ class PaperBananaPipeline:
 
         # ── Phase 1: Linear Planning ─────────────────────────────────
 
-        # Step 1: Retriever — find relevant examples
+        # Step 1: Retriever — find relevant examples (timer includes external call when enabled)
         logger.info("Phase 1: Retrieval")
-        candidates = self.reference_store.get_all()
         retrieval_start = time.perf_counter()
-        examples = await self.retriever.run(
-            source_context=input.source_context,
-            caption=input.communicative_intent,
-            candidates=candidates,
-            num_examples=self.settings.num_retrieval_examples,
-            diagram_type=input.diagram_type,
-        )
+        candidates = self.reference_store.get_all()
+        (
+            candidates,
+            retrieval_mode,
+            external_candidate_ids,
+        ) = await self._resolve_retrieval_candidates(input, candidates)
+        if retrieval_mode == "external_only":
+            examples = candidates[: self.settings.num_retrieval_examples]
+        else:
+            examples = await self.retriever.run(
+                source_context=input.source_context,
+                caption=input.communicative_intent,
+                candidates=candidates,
+                num_examples=self.settings.num_retrieval_examples,
+                diagram_type=input.diagram_type,
+            )
         retrieval_seconds = time.perf_counter() - retrieval_start
         logger.info(
             "[Retriever] done",
             seconds=round(retrieval_seconds, 1),
             examples_found=len(examples),
+            retrieval_mode=retrieval_mode,
         )
 
         # Step 2: Planner — generate textual description
@@ -334,6 +412,7 @@ class PaperBananaPipeline:
                 diagram_type=input.diagram_type,
                 raw_data=input.raw_data,
                 iteration=i + 1,
+                seed=self.settings.seed,
                 aspect_ratio=effective_ratio,
             )
             visualizer_seconds = time.perf_counter() - visualizer_start
@@ -426,6 +505,7 @@ class PaperBananaPipeline:
             image_provider=getattr(self._image_gen, "name", "custom"),
             image_model=getattr(self._image_gen, "model_name", "custom"),
             refinement_iterations=len(iterations),
+            seed=self.settings.seed,
             config_snapshot=self.settings.model_dump(
                 exclude={"google_api_key", "openai_api_key", "openrouter_api_key"}
             ),
@@ -440,6 +520,11 @@ class PaperBananaPipeline:
             "planning_seconds": planning_seconds,
             "styling_seconds": styling_seconds,
             "iterations": iteration_timings,
+        }
+        metadata_dict["retrieval"] = {
+            "mode": retrieval_mode,
+            "external_enabled": self.settings.exemplar_retrieval_enabled,
+            "external_candidate_ids": external_candidate_ids,
         }
 
         if self.settings.save_iterations:
@@ -516,6 +601,7 @@ class PaperBananaPipeline:
                 diagram_type=resume_state.diagram_type,
                 raw_data=resume_state.raw_data,
                 iteration=iter_num,
+                seed=self.settings.seed,
                 aspect_ratio=resume_state.aspect_ratio,
             )
             visualizer_seconds = time.perf_counter() - visualizer_start
@@ -608,6 +694,7 @@ class PaperBananaPipeline:
             image_provider=getattr(self._image_gen, "name", "custom"),
             image_model=getattr(self._image_gen, "model_name", "custom"),
             refinement_iterations=start_iter + len(iterations),
+            seed=self.settings.seed,
             config_snapshot=self.settings.model_dump(
                 exclude={"google_api_key", "openai_api_key", "openrouter_api_key"}
             ),

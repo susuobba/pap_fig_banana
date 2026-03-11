@@ -66,3 +66,53 @@ def test_output_format_from_yaml_invalid():
             Settings.from_yaml(path)
     finally:
         Path(path).unlink(missing_ok=True)
+
+
+def test_exemplar_retrieval_top_k_must_be_positive():
+    """exemplar_retrieval_top_k must be >= 1."""
+    with pytest.raises(ValidationError, match="exemplar_retrieval_top_k must be >= 1"):
+        Settings(exemplar_retrieval_top_k=0)
+
+
+def test_exemplar_retrieval_timeout_must_be_positive():
+    """exemplar_retrieval_timeout_seconds must be > 0."""
+    with pytest.raises(ValidationError, match="exemplar_retrieval_timeout_seconds must be > 0"):
+        Settings(exemplar_retrieval_timeout_seconds=0)
+
+
+def test_exemplar_retrieval_mode_literal_validation():
+    """exemplar_retrieval_mode accepts only supported modes."""
+    with pytest.raises(ValidationError):
+        Settings(exemplar_retrieval_mode="bad_mode")
+
+
+def test_exemplar_retrieval_max_retries_must_be_non_negative():
+    """exemplar_retrieval_max_retries must be >= 0."""
+    with pytest.raises(ValidationError, match="exemplar_retrieval_max_retries must be >= 0"):
+        Settings(exemplar_retrieval_max_retries=-1)
+
+
+def test_seed_accepts_integer():
+    """seed is accepted and stored."""
+    settings = Settings(seed=1234)
+    assert settings.seed == 1234
+
+
+def test_effective_vlm_model_gemini_override():
+    """Gemini VLM model override is used when provider is gemini."""
+    settings = Settings(
+        vlm_provider="gemini",
+        vlm_model="gemini-2.0-flash",
+        google_vlm_model="gemini-2.5-flash",
+    )
+    assert settings.effective_vlm_model == "gemini-2.5-flash"
+
+
+def test_effective_image_model_gemini_override():
+    """Gemini image model override is used when provider is google_imagen."""
+    settings = Settings(
+        image_provider="google_imagen",
+        image_model="gemini-3-pro-image-preview",
+        google_image_model="gemini-2.5-flash-image-preview",
+    )
+    assert settings.effective_image_model == "gemini-2.5-flash-image-preview"

@@ -25,9 +25,15 @@ class GeminiVLM(VLMProvider):
     Free tier: https://makersuite.google.com/app/apikey
     """
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.0-flash"):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = "gemini-2.0-flash",
+        base_url: Optional[str] = None,
+    ):
         self._api_key = api_key
         self._model = model
+        self._base_url = base_url
         self._client = None
 
     @property
@@ -43,7 +49,10 @@ class GeminiVLM(VLMProvider):
             try:
                 from google import genai
 
-                self._client = genai.Client(api_key=self._api_key)
+                client_kwargs = {"api_key": self._api_key}
+                if self._base_url:
+                    client_kwargs["http_options"] = {"base_url": self._base_url}
+                self._client = genai.Client(**client_kwargs)
             except ImportError:
                 raise ImportError(
                     "google-genai is required for Gemini provider. "

@@ -1,0 +1,21 @@
+# Benchmark harness defaults
+# Override via CLI flags or custom config file
+
+vlm:
+  provider: gemini
+  model: gemini-2.0-flash
+
+image:
+  provider: google_imagen
+  model: gemini-3-pro-image-preview
+
+pipeline:
+  refinement_iterations: 3
+  optimize_inputs: false
+  auto_refine: false
+
+output:
+  dir: outputs
+  format: png
+  save_iterations: true
+  save_prompts: false

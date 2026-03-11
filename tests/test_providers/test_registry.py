@@ -20,6 +20,21 @@ def test_create_gemini_vlm():
     assert vlm.model_name == "gemini-2.0-flash"
 
 
+def test_create_gemini_vlm_with_model_and_base_url_override():
+    """Gemini VLM uses gemini-specific model and base URL overrides."""
+    settings = Settings(
+        vlm_provider="gemini",
+        vlm_model="gemini-2.0-flash",
+        google_vlm_model="gemini-2.5-flash",
+        google_base_url="https://gemini-proxy.example.com",
+        google_api_key="test-key",
+    )
+    vlm = ProviderRegistry.create_vlm(settings)
+    assert vlm.name == "gemini"
+    assert vlm.model_name == "gemini-2.5-flash"
+    assert getattr(vlm, "_base_url") == "https://gemini-proxy.example.com"
+
+
 def test_create_google_imagen_gen():
     """Test creating a Google Imagen image gen provider."""
     settings = Settings(
@@ -28,6 +43,21 @@ def test_create_google_imagen_gen():
     )
     gen = ProviderRegistry.create_image_gen(settings)
     assert gen.name == "google_imagen"
+
+
+def test_create_google_imagen_with_model_and_base_url_override():
+    """Google Imagen uses gemini-specific model and base URL overrides."""
+    settings = Settings(
+        image_provider="google_imagen",
+        image_model="gemini-3-pro-image-preview",
+        google_image_model="gemini-2.5-flash-image-preview",
+        google_base_url="https://gemini-proxy.example.com",
+        google_api_key="test-key",
+    )
+    gen = ProviderRegistry.create_image_gen(settings)
+    assert gen.name == "google_imagen"
+    assert gen.model_name == "gemini-2.5-flash-image-preview"
+    assert getattr(gen, "_base_url") == "https://gemini-proxy.example.com"
 
 
 def test_missing_google_api_key_raises_helpful_error():
@@ -49,6 +79,16 @@ def test_missing_openrouter_api_key_raises_helpful_error():
     error_msg = str(exc_info.value)
     assert "openrouter.ai/keys" in error_msg
     assert "export OPENROUTER_API_KEY" in error_msg
+
+
+def test_missing_anthropic_api_key_raises_helpful_error():
+    """Test that missing ANTHROPIC_API_KEY raises a helpful error with setup instructions."""
+    settings = Settings(vlm_provider="anthropic", anthropic_api_key=None)
+    with pytest.raises(ValueError, match="ANTHROPIC_API_KEY not found") as exc_info:
+        ProviderRegistry.create_vlm(settings)
+    error_msg = str(exc_info.value)
+    assert "console.anthropic.com" in error_msg
+    assert "export ANTHROPIC_API_KEY" in error_msg
 
 
 def test_missing_google_api_key_for_image_gen_raises_helpful_error():

@@ -39,6 +39,7 @@ An agentic framework for generating publication-quality academic diagrams and st
 - Input optimization layer for better generation quality
 - Auto-refine mode and run continuation with user feedback
 - CLI, Python API, and MCP server for IDE integration
+- **Batch generation** from a manifest file (YAML/JSON) for multiple diagrams in one run
 - Claude Code skills for `/generate-diagram`, `/generate-plot`, and `/evaluate-diagram`
 
 <p align="center">
@@ -75,9 +76,15 @@ pip install -e ".[dev,openai,google]"
 cp .env.example .env
 # Edit .env and add your API key:
 #   OPENAI_API_KEY=your-key-here
+#   GOOGLE_API_KEY=your-key-here
 #
 # For Azure OpenAI / Foundry:
 #   OPENAI_BASE_URL=https://<resource>.openai.azure.com/openai/v1
+#
+# Optional Gemini overrides:
+#   GOOGLE_BASE_URL=https://your-gemini-proxy.example.com
+#   GOOGLE_VLM_MODEL=gemini-2.0-flash
+#   GOOGLE_IMAGE_MODEL=gemini-3-pro-image-preview
 ```
 
 Or use the setup wizard for Gemini:
@@ -142,6 +149,7 @@ PaperBanana supports multiple VLM and image generation providers:
 | VLM / Image | OpenRouter | Any supported model | Flexible routing |
 
 Azure OpenAI / Foundry endpoints are auto-detected — set `OPENAI_BASE_URL` to your endpoint.
+Gemini-compatible gateways are also supported — set `GOOGLE_BASE_URL` when needed.
 
 ---
 
@@ -205,6 +213,47 @@ paperbanana plot \
 | `--output` | `-o` | Output image path |
 | `--iterations` | `-n` | Refinement iterations (default: 3) |
 
+### `paperbanana batch` -- Batch Generation
+
+Generate multiple methodology diagrams from a single manifest file (YAML or JSON). Each item runs the full pipeline; outputs are written under `outputs/batch_<id>/run_<id>/` and a `batch_report.json` summarizes all runs.
+
+```bash
+paperbanana batch --manifest examples/batch_manifest.yaml --optimize
+```
+
+Manifest format (YAML or JSON with an `items` list):
+
+```yaml
+items:
+  - input: path/to/method1.txt
+    caption: "Overview of our encoder-decoder"
+    id: fig1
+  - input: method2.txt
+    caption: "Training pipeline"
+    id: fig2
+```
+
+Paths in the manifest are resolved relative to the manifest file's directory.
+
+**Generate a human-readable report** from an existing batch run (Markdown or HTML):
+
+```bash
+paperbanana batch-report --batch-dir outputs/batch_20250109_123456_abc --format markdown
+# or by batch ID (under default output dir)
+paperbanana batch-report --batch-id batch_20250109_123456_abc --format html --output report.html
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--manifest` | `-m` | Path to manifest file (required) |
+| `--output-dir` | `-o` | Parent directory for batch run (default: outputs) |
+| `--config` | | Path to config YAML |
+| `--iterations` | `-n` | Refinement iterations per item |
+| `--optimize` | | Preprocess inputs for each item |
+| `--auto` | | Loop until critic satisfied per item |
+| `--format` | `-f` | Output image format (png, jpeg, webp) |
+| `--auto-download-data` | | Download expanded reference set if needed |
+
 ### `paperbanana evaluate` -- Quality Assessment
 
 Comparative evaluation of a generated diagram against a human reference using VLM-as-a-Judge:
@@ -234,7 +283,8 @@ Scores on 4 dimensions (hierarchical aggregation per the paper):
 paperbanana setup
 ```
 
-Interactive wizard that walks you through obtaining a Google Gemini API key and saving it to `.env`.
+Interactive wizard that first asks whether to use the official Gemini API.
+If you choose official API, it follows the default AI Studio key flow; if not, it asks for a custom Gemini-compatible URL and API key.
 
 ---
 
@@ -361,6 +411,9 @@ OPENAI_IMAGE_MODEL=gpt-image-1.5              # override model
 
 # Google Gemini (alternative, free)
 GOOGLE_API_KEY=your-key
+GOOGLE_BASE_URL=                            # optional custom Gemini-compatible endpoint
+GOOGLE_VLM_MODEL=gemini-2.0-flash          # override Gemini VLM model
+GOOGLE_IMAGE_MODEL=gemini-3-pro-image-preview  # override Gemini image model
 ```
 
 ---

@@ -52,6 +52,7 @@ class ReferenceStore:
                     image_path=image_path,
                     category=item.get("category"),
                     aspect_ratio=item.get("aspect_ratio"),
+                    structure_hints=item.get("structure_hints"),
                 )
             )
 

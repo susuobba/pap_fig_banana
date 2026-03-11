@@ -118,6 +118,9 @@ The server reads configuration from environment variables and `.env` files.
 | `OPENAI_API_KEY` | (none) | OpenAI API key (default provider) |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI endpoint (or Azure OpenAI / Foundry URL) |
 | `GOOGLE_API_KEY` | (none) | Google API key (for Gemini provider) |
+| `GOOGLE_BASE_URL` | (none) | Optional custom Gemini-compatible endpoint |
+| `GOOGLE_VLM_MODEL` | (none) | Optional Gemini VLM model override |
+| `GOOGLE_IMAGE_MODEL` | (none) | Optional Gemini image model override |
 | `SKIP_SSL_VERIFICATION` | `false` | Disable SSL verification for proxied environments |
 
 ## Listing on MCP Directories
