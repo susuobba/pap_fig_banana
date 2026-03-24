@@ -316,7 +316,7 @@ paperbanana studio --port 8080 --output-dir ./my_outputs
 |------|-------------|
 | `--host` | Bind address (default `127.0.0.1`) |
 | `--port` | Port (default `7860`) |
-| `--share` | Create a temporary public Gradio link |
+| `--share` | Create a temporary public Gradio link (do not use with sensitive data) |
 | `--config` | Path to YAML config |
 | `--output-dir` / `-o` | Default output directory for runs |
 | `--root-path` | URL subpath when behind a reverse proxy |

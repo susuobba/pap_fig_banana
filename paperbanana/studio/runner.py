@@ -81,12 +81,13 @@ def build_settings(
     seed: Optional[int] = None,
 ) -> Settings:
     """Merge YAML config (optional), environment, and Studio overrides."""
+    base_defaults = Settings()
     overrides: dict[str, Any] = {
         "output_dir": output_dir,
         "vlm_provider": vlm_provider.strip() or "gemini",
-        "vlm_model": vlm_model.strip() or "gemini-2.0-flash",
+        "vlm_model": vlm_model.strip() or base_defaults.vlm_model,
         "image_provider": image_provider.strip() or "google_imagen",
-        "image_model": image_model.strip() or "gemini-3-pro-image-preview",
+        "image_model": image_model.strip() or base_defaults.image_model,
         "output_format": output_format.lower(),
         "refinement_iterations": int(refinement_iterations),
         "auto_refine": bool(auto_refine),
@@ -422,55 +423,58 @@ def run_batch(
 
     report: dict[str, Any] = {"batch_id": batch_id, "manifest": str(mpath.resolve()), "items": []}
 
-    for idx, item in enumerate(items):
-        item_id = item["id"]
-        input_path = Path(item["input"])
-        lines.append(f"— Item {idx + 1}/{len(items)} — {item_id}")
-        if not input_path.is_file():
-            lines.append(f"  skip: input not found ({input_path})")
-            report["items"].append(
-                {
-                    "id": item_id,
-                    "input": item["input"],
-                    "caption": item["caption"],
-                    "run_id": None,
-                    "output_path": None,
-                    "error": "input file not found",
-                }
+    async def _run_all_items() -> None:
+        for idx, item in enumerate(items):
+            item_id = item["id"]
+            input_path = Path(item["input"])
+            lines.append(f"— Item {idx + 1}/{len(items)} — {item_id}")
+            if not input_path.is_file():
+                lines.append(f"  skip: input not found ({input_path})")
+                report["items"].append(
+                    {
+                        "id": item_id,
+                        "input": item["input"],
+                        "caption": item["caption"],
+                        "run_id": None,
+                        "output_path": None,
+                        "error": "input file not found",
+                    }
+                )
+                continue
+            source_context = input_path.read_text(encoding="utf-8", errors="replace")
+            gen_in = GenerationInput(
+                source_context=source_context,
+                communicative_intent=item["caption"],
+                diagram_type=DiagramType.METHODOLOGY,
             )
-            continue
-        source_context = input_path.read_text(encoding="utf-8", errors="replace")
-        gen_in = GenerationInput(
-            source_context=source_context,
-            communicative_intent=item["caption"],
-            diagram_type=DiagramType.METHODOLOGY,
-        )
-        pipeline = PaperBananaPipeline(settings=settings)
-        try:
-            result = asyncio.run(pipeline.generate(gen_in))
-            lines.append(f"  ok: {result.image_path}")
-            report["items"].append(
-                {
-                    "id": item_id,
-                    "input": item["input"],
-                    "caption": item["caption"],
-                    "run_id": result.metadata.get("run_id"),
-                    "output_path": result.image_path,
-                    "iterations": len(result.iterations),
-                }
-            )
-        except Exception as e:
-            lines.append(f"  error: {e}")
-            report["items"].append(
-                {
-                    "id": item_id,
-                    "input": item["input"],
-                    "caption": item["caption"],
-                    "run_id": None,
-                    "output_path": None,
-                    "error": str(e),
-                }
-            )
+            pipeline = PaperBananaPipeline(settings=settings)
+            try:
+                result = await pipeline.generate(gen_in)
+                lines.append(f"  ok: {result.image_path}")
+                report["items"].append(
+                    {
+                        "id": item_id,
+                        "input": item["input"],
+                        "caption": item["caption"],
+                        "run_id": result.metadata.get("run_id"),
+                        "output_path": result.image_path,
+                        "iterations": len(result.iterations),
+                    }
+                )
+            except Exception as e:
+                lines.append(f"  error: {e}")
+                report["items"].append(
+                    {
+                        "id": item_id,
+                        "input": item["input"],
+                        "caption": item["caption"],
+                        "run_id": None,
+                        "output_path": None,
+                        "error": str(e),
+                    }
+                )
+
+    asyncio.run(_run_all_items())
 
     report_path = batch_dir / "batch_report.json"
     save_json(report, report_path)

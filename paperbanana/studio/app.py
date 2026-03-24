@@ -488,7 +488,7 @@ def build_studio_app(
                     try:
                         st = _settings(od, c, vp, vm, ip, im, fo, it, au, mx, op, sp, sd)
                         if not (rid or "").strip():
-                            return "Run ID is required.", None, [], gr.update()
+                            return "Run ID is required.", None, []
                         ex: Optional[int] = None
                         if extra is not None and not (
                             isinstance(extra, float) and math.isnan(extra)
