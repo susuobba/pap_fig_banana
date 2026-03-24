@@ -40,6 +40,7 @@ An agentic framework for generating publication-quality academic diagrams and st
 - Auto-refine mode and run continuation with user feedback
 - CLI, Python API, and MCP server for IDE integration
 - **Batch generation** from a manifest file (YAML/JSON) for multiple diagrams in one run
+- **PDF inputs** for methodology context (optional `paperbanana[pdf]` / PyMuPDF), with per-page selection
 - Claude Code skills for `/generate-diagram`, `/generate-plot`, and `/evaluate-diagram`
 
 <p align="center">
@@ -176,11 +177,17 @@ paperbanana generate --continue \
 # Continue a specific run
 paperbanana generate --continue-run run_20260218_125448_e7b876 \
   --iterations 3
+
+# PDF as input (install PyMuPDF: pip install 'paperbanana[pdf]')
+paperbanana generate \
+  --input paper.pdf \
+  --caption "Overview of our method" \
+  --pdf-pages "3-8"
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--input` | `-i` | Path to methodology text file (required for new runs) |
+| `--input` | `-i` | Path to methodology text file or PDF (required for new runs) |
 | `--caption` | `-c` | Figure caption / communicative intent (required for new runs) |
 | `--output` | `-o` | Output image path (default: auto-generated in `outputs/`) |
 | `--iterations` | `-n` | Number of Visualizer-Critic refinement rounds (default: 3) |
@@ -190,6 +197,7 @@ paperbanana generate --continue-run run_20260218_125448_e7b876 \
 | `--continue` | | Continue from the latest run in `outputs/` |
 | `--continue-run` | | Continue from a specific run ID |
 | `--feedback` | | User feedback for the critic when continuing a run |
+| `--pdf-pages` | | PDF input only: 1-based pages (e.g. `1-5`, `2,4,6-8`; default: all) |
 | `--vlm-provider` | | VLM provider name (default: `openai`) |
 | `--vlm-model` | | VLM model name (default: `gpt-5.2`) |
 | `--image-provider` | | Image gen provider (default: `openai_imagen`) |
@@ -232,6 +240,10 @@ items:
   - input: method2.txt
     caption: "Training pipeline"
     id: fig2
+  - input: paper.pdf
+    caption: "System overview"
+    id: fig3
+    pdf_pages: "4-9" # optional; PDF inputs only
 ```
 
 Paths in the manifest are resolved relative to the manifest file's directory.
@@ -271,8 +283,9 @@ paperbanana evaluate \
 |------|-------|-------------|
 | `--generated` | `-g` | Path to generated image (required) |
 | `--reference` | `-r` | Path to human reference image (required) |
-| `--context` | | Path to source context text file (required) |
+| `--context` | | Path to source context text file or PDF (required) |
 | `--caption` | `-c` | Figure caption (required) |
+| `--pdf-pages` | | PDF context only: 1-based page selection (default: all) |
 
 Scores on 4 dimensions (hierarchical aggregation per the paper):
 - **Primary**: Faithfulness, Readability
