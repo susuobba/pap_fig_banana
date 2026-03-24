@@ -41,6 +41,7 @@ An agentic framework for generating publication-quality academic diagrams and st
 - CLI, Python API, and MCP server for IDE integration
 - **Batch generation** from a manifest file (YAML/JSON) for multiple diagrams in one run
 - **PDF inputs** for methodology context (optional `paperbanana[pdf]` / PyMuPDF), with per-page selection
+- **PaperBanana Studio** — local Gradio web UI (`paperbanana studio`) for diagrams, plots, evaluation, batch, and run browser
 - Claude Code skills for `/generate-diagram`, `/generate-plot`, and `/evaluate-diagram`
 
 <p align="center">
@@ -112,6 +113,17 @@ paperbanana generate \
 ```
 
 Output is saved to `outputs/run_<timestamp>/final_output.png` along with all intermediate iterations and metadata.
+
+### PaperBanana Studio (local web UI)
+
+Install the optional Gradio dependency, then start the app:
+
+```bash
+pip install 'paperbanana[studio]'
+paperbanana studio
+```
+
+Open the URL shown in the terminal (default `http://127.0.0.1:7860/`). The Studio exposes the same workflows as the CLI: methodology diagrams, statistical plots, comparative evaluation, continuing a prior run, batch manifests, and a simple browser for `run_*` / `batch_*` output folders. Use `--host`, `--port`, `--config`, and `--output-dir` as needed.
 
 ---
 
@@ -290,6 +302,24 @@ paperbanana evaluate \
 Scores on 4 dimensions (hierarchical aggregation per the paper):
 - **Primary**: Faithfulness, Readability
 - **Secondary**: Conciseness, Aesthetics
+
+### `paperbanana studio` -- Local web UI
+
+Requires `pip install 'paperbanana[studio]'` (Gradio).
+
+```bash
+paperbanana studio
+paperbanana studio --port 8080 --output-dir ./my_outputs
+```
+
+| Flag | Description |
+|------|-------------|
+| `--host` | Bind address (default `127.0.0.1`) |
+| `--port` | Port (default `7860`) |
+| `--share` | Create a temporary public Gradio link (do not use with sensitive data) |
+| `--config` | Path to YAML config |
+| `--output-dir` / `-o` | Default output directory for runs |
+| `--root-path` | URL subpath when behind a reverse proxy |
 
 ### `paperbanana setup` -- First-Time Configuration
 
