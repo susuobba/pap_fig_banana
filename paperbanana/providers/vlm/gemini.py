@@ -28,12 +28,15 @@ class GeminiVLM(VLMProvider):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gemini-2.0-flash",
+        *,
+        model: str,
         base_url: Optional[str] = None,
+        credentials: Optional[object] = None,
     ):
         self._api_key = api_key
         self._model = model
         self._base_url = base_url
+        self._credentials = credentials
         self._client = None
 
     @property
@@ -49,7 +52,11 @@ class GeminiVLM(VLMProvider):
             try:
                 from google import genai
 
-                client_kwargs = {"api_key": self._api_key}
+                client_kwargs: dict = {}
+                if self._credentials:
+                    client_kwargs["credentials"] = self._credentials
+                elif self._api_key:
+                    client_kwargs["api_key"] = self._api_key
                 if self._base_url:
                     client_kwargs["http_options"] = {"base_url": self._base_url}
                 self._client = genai.Client(**client_kwargs)
@@ -65,7 +72,7 @@ class GeminiVLM(VLMProvider):
         return bool(_THINKING_MODEL_RE.search(self._model.lower()))
 
     def is_available(self) -> bool:
-        return self._api_key is not None
+        return self._api_key is not None or self._credentials is not None
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(min=2, max=120))
     async def generate(

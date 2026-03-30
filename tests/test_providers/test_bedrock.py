@@ -80,7 +80,7 @@ class TestRegistryCreation:
         with patch.dict("sys.modules", {"boto3": MagicMock(Session=mock_session_cls)}):
             settings = Settings(
                 vlm_provider="bedrock",
-                vlm_model="gemini-2.0-flash",
+                vlm_model="gemini-3.1-pro-preview",
                 bedrock_vlm_model="anthropic.claude-sonnet-4-20250514-v1:0",
             )
             vlm = ProviderRegistry.create_vlm(settings)
@@ -418,14 +418,14 @@ class TestEffectiveModels:
     def test_effective_vlm_model_bedrock(self):
         settings = Settings(
             vlm_provider="bedrock",
-            vlm_model="gemini-2.0-flash",
+            vlm_model="gemini-3.1-pro-preview",
             bedrock_vlm_model="us.amazon.nova-pro-v1:0",
         )
         assert settings.effective_vlm_model == "us.amazon.nova-pro-v1:0"
 
     def test_effective_vlm_model_bedrock_no_override(self):
-        settings = Settings(vlm_provider="bedrock", vlm_model="gemini-2.0-flash")
-        assert settings.effective_vlm_model == "gemini-2.0-flash"
+        settings = Settings(vlm_provider="bedrock", vlm_model="gemini-3.1-pro-preview")
+        assert settings.effective_vlm_model == "gemini-3.1-pro-preview"
 
     def test_effective_image_model_bedrock(self):
         settings = Settings(

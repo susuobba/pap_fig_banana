@@ -8,7 +8,8 @@ vlm:
 
 image:
   provider: google_imagen
-  model: gemini-3-pro-image-preview
+  model: gemini-3-pro-image-preview  # Nano Banana Pro (1K/2K/4K)
+  # model: gemini-3.1-flash-image-preview  # Nano Banana 2 (512/1K/2K/4K)
 
 # Pipeline settings
 pipeline:
@@ -17,7 +18,7 @@ pipeline:
   # auto_refine: true         # Loop until critic is satisfied
   # max_iterations: 30        # Safety cap for auto_refine mode
   # optimize_inputs: true     # Preprocess inputs for better generation
-  output_resolution: "2k"   # 1k, 2k, 4k
+  output_resolution: "2K"   # 512 (Nano Banana 2 only), 1K, 2K, 4K
   diagram_type: methodology  # methodology, statistical_plot
 
 # Reference set

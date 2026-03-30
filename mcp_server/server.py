@@ -3,11 +3,17 @@
 Exposes PaperBanana's core functionality as MCP tools usable from
 Claude Code, Cursor, or any MCP client.
 
-Tools:
+Tools (autonomous — internal VLM handles all reasoning):
     generate_diagram    — Generate a methodology diagram from text
     generate_plot       — Generate a statistical plot from JSON data
     evaluate_diagram    — Evaluate a generated diagram against a reference
     download_references — Download expanded reference set (~294 examples)
+
+Tools (orchestrated — external LLM acts as VLM, only image gen runs here):
+    render_image        — Render an image from a detailed description (Visualizer only)
+    critique_image      — Have the internal VLM critique a generated image
+    load_guidelines     — Load aesthetic guidelines for diagram styling
+    list_references     — List available reference examples for in-context learning
 
 Usage:
     paperbanana-mcp          # stdio transport (default)
@@ -17,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from io import BytesIO
 from pathlib import Path
 
@@ -105,6 +112,18 @@ def _compress_for_api(image_path: str) -> tuple[str, str]:
     )
 
 
+def _save_to_path(source_path: str, save_path: str) -> str:
+    """Copy the generated image to the user-specified save_path.
+
+    Creates parent directories if needed. Returns the save_path.
+    """
+    dest = Path(save_path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_path, dest)
+    logger.info("Image saved to user-specified path", save_path=str(dest))
+    return str(dest)
+
+
 mcp = FastMCP("PaperBanana")
 
 
@@ -114,8 +133,11 @@ async def generate_diagram(
     caption: str,
     iterations: int = 3,
     aspect_ratio: str | None = None,
+    output_resolution: str = "2K",
+    image_model: str | None = None,
     optimize: bool = False,
     auto_refine: bool = False,
+    save_path: str | None = None,
 ) -> Image:
     """Generate a publication-quality methodology diagram from text.
 
@@ -125,19 +147,32 @@ async def generate_diagram(
         iterations: Number of refinement iterations (default 3, used when auto_refine=False).
         aspect_ratio: Target aspect ratio. Supported:
             1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9. Default: landscape.
+        output_resolution: Image resolution. Supported: "512" (Nano Banana 2 only),
+            "1K", "2K" (default), "4K". Higher values produce sharper images.
+        image_model: Image generation model. Supported:
+            "gemini-3-pro-image-preview" (Nano Banana Pro, default),
+            "gemini-3.1-flash-image-preview" (Nano Banana 2, faster, supports 512px).
         optimize: Enrich context and sharpen caption before generation (default True).
             Set False to skip preprocessing for faster results.
         auto_refine: Let critic loop until satisfied (default True, max 30 iterations).
             Set False to use fixed iteration count for faster results.
+        save_path: Absolute file path to save the generated image to (e.g.
+            "/home/user/paper/figures/fig1.png"). Parent directories are created
+            automatically. When omitted the image is only stored in the internal
+            outputs directory.
 
     Returns:
         The generated diagram as a PNG image.
     """
-    settings = Settings(
+    overrides: dict = dict(
         refinement_iterations=iterations,
         optimize_inputs=optimize,
         auto_refine=auto_refine,
+        output_resolution=output_resolution,
     )
+    if image_model:
+        overrides["image_model"] = image_model
+    settings = Settings(**overrides)
 
     def _on_progress(event: str, payload: dict) -> None:
         # Surface coarse progress to MCP logs; IDEs can display this in tool output.
@@ -153,6 +188,10 @@ async def generate_diagram(
     )
 
     result = await pipeline.generate(gen_input)
+
+    if save_path:
+        _save_to_path(result.image_path, save_path)
+
     effective_path, fmt = _compress_for_api(result.image_path)
     return Image(path=effective_path, format=fmt)
 
@@ -163,8 +202,11 @@ async def generate_plot(
     intent: str,
     iterations: int = 3,
     aspect_ratio: str | None = None,
+    output_resolution: str = "2K",
+    image_model: str | None = None,
     optimize: bool = False,
     auto_refine: bool = False,
+    save_path: str | None = None,
 ) -> Image:
     """Generate a publication-quality statistical plot from JSON data.
 
@@ -175,21 +217,34 @@ async def generate_plot(
         iterations: Number of refinement iterations (default 3, used when auto_refine=False).
         aspect_ratio: Target aspect ratio. Supported:
             1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9. Default: landscape.
+        output_resolution: Image resolution. Supported: "512" (Nano Banana 2 only),
+            "1K", "2K" (default), "4K". Higher values produce sharper images.
+        image_model: Image generation model. Supported:
+            "gemini-3-pro-image-preview" (Nano Banana Pro, default),
+            "gemini-3.1-flash-image-preview" (Nano Banana 2, faster, supports 512px).
         optimize: Enrich context and sharpen caption before generation (default True).
             Set False to skip preprocessing for faster results.
         auto_refine: Let critic loop until satisfied (default True, max 30 iterations).
             Set False to use fixed iteration count for faster results.
+        save_path: Absolute file path to save the generated plot to (e.g.
+            "/home/user/paper/figures/plot1.png"). Parent directories are created
+            automatically. When omitted the image is only stored in the internal
+            outputs directory.
 
     Returns:
         The generated plot as a PNG image.
     """
     raw_data = json.loads(data_json)
 
-    settings = Settings(
+    overrides: dict = dict(
         refinement_iterations=iterations,
         optimize_inputs=optimize,
         auto_refine=auto_refine,
+        output_resolution=output_resolution,
     )
+    if image_model:
+        overrides["image_model"] = image_model
+    settings = Settings(**overrides)
 
     def _on_progress(event: str, payload: dict) -> None:
         logger.info("mcp_progress", tool="generate_plot", progress_event=event, **payload)
@@ -205,6 +260,10 @@ async def generate_plot(
     )
 
     result = await pipeline.generate(gen_input)
+
+    if save_path:
+        _save_to_path(result.image_path, save_path)
+
     effective_path, fmt = _compress_for_api(result.image_path)
     return Image(path=effective_path, format=fmt)
 
@@ -294,6 +353,200 @@ async def download_references(
         f"Cached to: {dm.reference_dir}\n"
         f"The Retriever agent will now use these for better diagram generation."
     )
+
+
+# ---------------------------------------------------------------------------
+# Orchestrated tools — external LLM acts as VLM, only image gen runs here
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+async def render_image(
+    description: str,
+    aspect_ratio: str | None = None,
+    output_resolution: str = "2K",
+    image_model: str | None = None,
+    seed: int | None = None,
+    diagram_type: str = "methodology",
+    save_path: str | None = None,
+) -> Image:
+    """Render an image from a detailed textual description (Visualizer agent only).
+
+    Use this when YOU (the calling LLM) are orchestrating the pipeline yourself.
+    You handle planning, styling, and critique; this tool only does image generation.
+
+    For methodology diagrams: calls Gemini image generation.
+    For statistical plots: generates and executes matplotlib code.
+
+    Args:
+        description: Detailed, style-complete description of the diagram to render.
+            Should include layout, colors, fonts, arrows, labels — everything the
+            image generator needs. The more specific, the better the output.
+        aspect_ratio: Target aspect ratio. Supported:
+            1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9. Default: 16:9.
+        output_resolution: Image resolution. Supported: "512" (Nano Banana 2 only),
+            "1K", "2K" (default), "4K". Higher values produce sharper images.
+        image_model: Image generation model. Supported:
+            "gemini-3-pro-image-preview" (Nano Banana Pro, default),
+            "gemini-3.1-flash-image-preview" (Nano Banana 2, faster, supports 512px).
+        seed: Random seed for reproducibility.
+        diagram_type: "methodology" or "statistical_plot".
+        save_path: Absolute file path to save the rendered image to (e.g.
+            "/home/user/paper/figures/fig1.png"). Parent directories are created
+            automatically. When omitted the image is only stored in the internal
+            outputs directory.
+
+    Returns:
+        The rendered image as PNG.
+    """
+    overrides: dict = dict(output_resolution=output_resolution)
+    if image_model:
+        overrides["image_model"] = image_model
+    settings = Settings(**overrides)
+    dtype = DiagramType.STATISTICAL_PLOT if diagram_type == "statistical_plot" else DiagramType.METHODOLOGY
+
+    from paperbanana.agents.visualizer import VisualizerAgent
+
+    image_gen = ProviderRegistry.create_image_gen(settings)
+    vlm = ProviderRegistry.create_vlm(settings)  # needed for plot code generation
+
+    visualizer = VisualizerAgent(
+        image_gen=image_gen,
+        vlm_provider=vlm,
+        prompt_dir=find_prompt_dir(),
+        output_dir=settings.output_dir,
+    )
+
+    image_path = await visualizer.run(
+        description=description,
+        diagram_type=dtype,
+        seed=seed,
+        aspect_ratio=aspect_ratio,
+        output_resolution=output_resolution,
+    )
+
+    if save_path:
+        _save_to_path(image_path, save_path)
+
+    effective_path, fmt = _compress_for_api(image_path)
+    return Image(path=effective_path, format=fmt)
+
+
+@mcp.tool
+async def critique_image(
+    image_path: str,
+    description: str,
+    source_context: str,
+    caption: str,
+    user_feedback: str | None = None,
+) -> str:
+    """Have the internal VLM critique a generated diagram image.
+
+    Use this when YOU are orchestrating the pipeline and want the internal
+    critic to evaluate the image quality and suggest revisions.
+
+    Args:
+        image_path: Absolute file path to the generated image.
+        description: The textual description that was used to generate the image.
+        source_context: Original methodology text.
+        caption: Figure caption.
+        user_feedback: Optional additional feedback to guide the critique
+            (e.g. "the arrows are hard to read" or "needs more color contrast").
+
+    Returns:
+        JSON with critic_suggestions (list[str]) and revised_description (str|null).
+        If critic_suggestions is empty, the image is satisfactory.
+    """
+    settings = Settings()
+    vlm = ProviderRegistry.create_vlm(settings)
+
+    from paperbanana.agents.critic import CriticAgent
+
+    critic = CriticAgent(vlm_provider=vlm, prompt_dir=find_prompt_dir())
+    result = await critic.run(
+        image_path=image_path,
+        description=description,
+        source_context=source_context,
+        caption=caption,
+        diagram_type=DiagramType.METHODOLOGY,
+        user_feedback=user_feedback,
+    )
+
+    return json.dumps({
+        "critic_suggestions": result.critic_suggestions,
+        "revised_description": result.revised_description,
+        "needs_revision": result.needs_revision,
+    }, ensure_ascii=False, indent=2)
+
+
+@mcp.tool
+async def load_guidelines() -> str:
+    """Load PaperBanana's aesthetic guidelines for academic diagram styling.
+
+    Returns the built-in style guide that the Stylist agent uses. Use this
+    as context when YOU are writing the diagram description yourself, so your
+    descriptions follow academic illustration best practices.
+
+    Returns:
+        The full guidelines text covering colors, typography, layout, and visual elements.
+    """
+    from paperbanana.core.utils import find_prompt_dir
+
+    guidelines_path = Path(find_prompt_dir()) / "diagram" / "stylist.txt"
+    if not guidelines_path.exists():
+        # Try alternative locations
+        for candidate in [
+            Path(find_prompt_dir()) / "methodology" / "stylist.txt",
+            Path(find_prompt_dir()) / "stylist.txt",
+        ]:
+            if candidate.exists():
+                guidelines_path = candidate
+                break
+
+    if guidelines_path.exists():
+        return guidelines_path.read_text(encoding="utf-8")
+    return "Guidelines file not found. Use soft pastel colors, sans-serif fonts, rounded rectangles, clean arrows, no gradients or 3D effects."
+
+
+@mcp.tool
+async def list_references(
+    max_items: int = 20,
+) -> str:
+    """List available reference examples from PaperBananaBench.
+
+    Returns metadata about cached reference diagrams that can be used for
+    in-context learning. Call download_references first if none are available.
+
+    Args:
+        max_items: Maximum number of reference entries to return (default 20).
+
+    Returns:
+        JSON array of reference examples with id, caption, and category.
+    """
+    from paperbanana.data.manager import DatasetManager
+
+    dm = DatasetManager()
+    if not dm.is_downloaded():
+        return json.dumps({
+            "error": "Reference set not downloaded. Call download_references first.",
+            "count": 0,
+        })
+
+    examples = dm.load_examples()
+    items = []
+    for ex in examples[:max_items]:
+        items.append({
+            "id": ex.id,
+            "caption": ex.caption,
+            "category": ex.category,
+            "image_path": ex.image_path,
+        })
+
+    return json.dumps({
+        "count": len(examples),
+        "shown": len(items),
+        "examples": items,
+    }, ensure_ascii=False, indent=2)
 
 
 def main():

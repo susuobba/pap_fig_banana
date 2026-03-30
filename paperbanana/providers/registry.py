@@ -12,12 +12,12 @@ logger = structlog.get_logger()
 
 _API_KEY_HINTS = {
     "GOOGLE_API_KEY": (
-        "GOOGLE_API_KEY not found.\n\n"
-        "To fix this:\n"
-        "  1. Get a free API key at: https://makersuite.google.com/app/apikey\n"
-        "  2. Run: paperbanana setup\n\n"
-        "Or set it manually:\n"
-        "  export GOOGLE_API_KEY=your-key-here"
+        "Google credentials not found.\n\n"
+        "To fix this, use one of:\n"
+        "  1. Service account JSON (recommended):\n"
+        "     export GOOGLE_SERVICE_ACCOUNT_JSON=/path/to/service-account.json\n\n"
+        "  2. API key:\n"
+        "     export GOOGLE_API_KEY=your-key-here"
     ),
     "OPENROUTER_API_KEY": (
         "OPENROUTER_API_KEY not found.\n\n"
@@ -53,6 +53,33 @@ _API_KEY_HINTS = {
 }
 
 
+def _load_google_credentials(sa_json_path: str | None):
+    """Load Google service account credentials from JSON file."""
+    if not sa_json_path or not sa_json_path.strip():
+        return None
+    from pathlib import Path
+
+    path = Path(sa_json_path.strip())
+    if not path.exists():
+        logger.warning("Service account JSON not found", path=str(path))
+        return None
+    try:
+        from google.oauth2 import service_account
+
+        creds = service_account.Credentials.from_service_account_file(
+            str(path),
+            scopes=[
+                "https://www.googleapis.com/auth/generative-language",
+                "https://www.googleapis.com/auth/cloud-platform",
+            ],
+        )
+        logger.info("Loaded Google service account credentials", path=str(path))
+        return creds
+    except Exception as e:
+        logger.warning("Failed to load service account JSON", error=str(e))
+        return None
+
+
 def _validate_api_key(key_value: str | None, env_var_name: str) -> None:
     """Raise a helpful error if the required API key is missing."""
     if key_value is None or not key_value.strip():
@@ -85,13 +112,16 @@ class ProviderRegistry:
         logger.info("Creating VLM provider", provider=provider, model=settings.vlm_model)
 
         if provider == "gemini":
-            _validate_api_key(settings.google_api_key, "GOOGLE_API_KEY")
             from paperbanana.providers.vlm.gemini import GeminiVLM
 
+            creds = _load_google_credentials(settings.google_service_account_json)
+            if creds is None:
+                _validate_api_key(settings.google_api_key, "GOOGLE_API_KEY")
             return GeminiVLM(
-                api_key=settings.google_api_key,
+                api_key=settings.google_api_key if creds is None else None,
                 model=settings.google_vlm_model or settings.vlm_model,
                 base_url=settings.google_base_url,
+                credentials=creds,
             )
         elif provider == "openrouter":
             _validate_api_key(settings.openrouter_api_key, "OPENROUTER_API_KEY")
@@ -140,13 +170,16 @@ class ProviderRegistry:
         logger.info("Creating image gen provider", provider=provider, model=settings.image_model)
 
         if provider == "google_imagen":
-            _validate_api_key(settings.google_api_key, "GOOGLE_API_KEY")
             from paperbanana.providers.image_gen.google_imagen import GoogleImagenGen
 
+            creds = _load_google_credentials(settings.google_service_account_json)
+            if creds is None:
+                _validate_api_key(settings.google_api_key, "GOOGLE_API_KEY")
             return GoogleImagenGen(
-                api_key=settings.google_api_key,
+                api_key=settings.google_api_key if creds is None else None,
                 model=settings.google_image_model or settings.image_model,
                 base_url=settings.google_base_url,
+                credentials=creds,
             )
         elif provider == "openrouter_imagen":
             _validate_api_key(settings.openrouter_api_key, "OPENROUTER_API_KEY")

@@ -52,6 +52,7 @@ class VisualizerAgent(BaseAgent):
         iteration: int = 0,
         seed: Optional[int] = None,
         aspect_ratio: Optional[str] = None,
+        output_resolution: Optional[str] = None,
     ) -> str:
         """Generate an image from a description.
 
@@ -63,6 +64,7 @@ class VisualizerAgent(BaseAgent):
             iteration: Current iteration number (for naming).
             seed: Random seed for reproducibility.
             aspect_ratio: Target aspect ratio (e.g., '16:9', '1:1').
+            output_resolution: Target resolution (512, 1K, 2K, 4K).
 
         Returns:
             Path to the generated image.
@@ -78,6 +80,7 @@ class VisualizerAgent(BaseAgent):
                 iteration,
                 seed,
                 aspect_ratio,
+                output_resolution,
             )
 
     async def _generate_diagram(
@@ -87,6 +90,7 @@ class VisualizerAgent(BaseAgent):
         iteration: int,
         seed: Optional[int],
         aspect_ratio: Optional[str] = None,
+        output_resolution: Optional[str] = None,
     ) -> str:
         """Generate a methodology diagram using the image generation model."""
         template = self.load_prompt("diagram")
@@ -96,7 +100,11 @@ class VisualizerAgent(BaseAgent):
             description=description,
         )
 
-        logger.info("Generating diagram image", iteration=iteration)
+        logger.info(
+            "Generating diagram image",
+            iteration=iteration,
+            output_resolution=output_resolution,
+        )
 
         # Determine dimensions from aspect ratio or use defaults
         w, h = self._ratio_to_dimensions(aspect_ratio) if aspect_ratio else (1792, 1024)
@@ -107,6 +115,7 @@ class VisualizerAgent(BaseAgent):
             height=h,
             seed=seed,
             aspect_ratio=aspect_ratio,
+            output_resolution=output_resolution,
         )
 
         if output_path is None:

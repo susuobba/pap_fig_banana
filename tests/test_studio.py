@@ -33,7 +33,7 @@ def test_build_settings_merge(tmp_path):
         config_path=None,
         output_dir=str(tmp_path / "out"),
         vlm_provider="gemini",
-        vlm_model="gemini-2.0-flash",
+        vlm_model="gemini-3.1-pro-preview",
         image_provider="google_imagen",
         image_model="gemini-3-pro-image-preview",
         output_format="png",

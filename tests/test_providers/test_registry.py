@@ -12,19 +12,19 @@ def test_create_gemini_vlm():
     """Test creating a Gemini VLM provider."""
     settings = Settings(
         vlm_provider="gemini",
-        vlm_model="gemini-2.0-flash",
+        vlm_model="gemini-3.1-pro-preview",
         google_api_key="test-key",
     )
     vlm = ProviderRegistry.create_vlm(settings)
     assert vlm.name == "gemini"
-    assert vlm.model_name == "gemini-2.0-flash"
+    assert vlm.model_name == "gemini-3.1-pro-preview"
 
 
 def test_create_gemini_vlm_with_model_and_base_url_override():
     """Gemini VLM uses gemini-specific model and base URL overrides."""
     settings = Settings(
         vlm_provider="gemini",
-        vlm_model="gemini-2.0-flash",
+        vlm_model="gemini-3.1-pro-preview",
         google_vlm_model="gemini-2.5-flash",
         google_base_url="https://gemini-proxy.example.com",
         google_api_key="test-key",
@@ -60,15 +60,18 @@ def test_create_google_imagen_with_model_and_base_url_override():
     assert getattr(gen, "_base_url") == "https://gemini-proxy.example.com"
 
 
-def test_missing_google_api_key_raises_helpful_error():
-    """Test that missing GOOGLE_API_KEY raises a helpful error with setup instructions."""
-    settings = Settings(vlm_provider="gemini", google_api_key=None)
-    with pytest.raises(ValueError, match="GOOGLE_API_KEY not found") as exc_info:
+def test_missing_google_credentials_raises_helpful_error():
+    """Test that missing Google credentials raises a helpful error."""
+    settings = Settings(
+        vlm_provider="gemini",
+        google_api_key=None,
+        google_service_account_json=None,
+    )
+    with pytest.raises(ValueError, match="Google credentials not found") as exc_info:
         ProviderRegistry.create_vlm(settings)
     error_msg = str(exc_info.value)
-    assert "makersuite.google.com" in error_msg
-    assert "paperbanana setup" in error_msg
-    assert "export GOOGLE_API_KEY" in error_msg
+    assert "GOOGLE_SERVICE_ACCOUNT_JSON" in error_msg
+    assert "GOOGLE_API_KEY" in error_msg
 
 
 def test_missing_openrouter_api_key_raises_helpful_error():
@@ -91,10 +94,14 @@ def test_missing_anthropic_api_key_raises_helpful_error():
     assert "export ANTHROPIC_API_KEY" in error_msg
 
 
-def test_missing_google_api_key_for_image_gen_raises_helpful_error():
-    """Test that missing GOOGLE_API_KEY for image gen raises a helpful error."""
-    settings = Settings(image_provider="google_imagen", google_api_key=None)
-    with pytest.raises(ValueError, match="GOOGLE_API_KEY not found"):
+def test_missing_google_credentials_for_image_gen_raises_helpful_error():
+    """Test that missing Google credentials for image gen raises a helpful error."""
+    settings = Settings(
+        image_provider="google_imagen",
+        google_api_key=None,
+        google_service_account_json=None,
+    )
+    with pytest.raises(ValueError, match="Google credentials not found"):
         ProviderRegistry.create_image_gen(settings)
 
 
@@ -107,13 +114,16 @@ def test_missing_openrouter_api_key_for_image_gen_raises_helpful_error():
 
 def test_empty_api_key_raises_helpful_error():
     """Test that empty or whitespace-only API key raises a helpful error."""
-    settings = Settings(vlm_provider="gemini", google_api_key="   ")
-    with pytest.raises(ValueError, match="GOOGLE_API_KEY not found") as exc_info:
+    settings = Settings(
+        vlm_provider="gemini",
+        google_api_key="   ",
+        google_service_account_json=None,
+    )
+    with pytest.raises(ValueError, match="Google credentials not found") as exc_info:
         ProviderRegistry.create_vlm(settings)
     error_msg = str(exc_info.value)
-    assert "makersuite.google.com" in error_msg
-    assert "paperbanana setup" in error_msg
-    assert "export GOOGLE_API_KEY" in error_msg
+    assert "GOOGLE_SERVICE_ACCOUNT_JSON" in error_msg
+    assert "GOOGLE_API_KEY" in error_msg
 
 
 def test_unknown_vlm_provider_raises():

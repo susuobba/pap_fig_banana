@@ -555,6 +555,7 @@ class PaperBananaPipeline:
                 iteration=iter_index,
                 seed=self.settings.seed,
                 aspect_ratio=effective_ratio,
+                output_resolution=self.settings.output_resolution,
             )
             visualizer_seconds = time.perf_counter() - visualizer_start
             _emit_progress(
@@ -824,6 +825,7 @@ class PaperBananaPipeline:
                 iteration=iter_num,
                 seed=self.settings.seed,
                 aspect_ratio=resume_state.aspect_ratio,
+                output_resolution=self.settings.output_resolution,
             )
             visualizer_seconds = time.perf_counter() - visualizer_start
             _emit_progress(

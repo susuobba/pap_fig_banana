@@ -10,14 +10,18 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 OutputFormat = Literal["png", "jpeg", "webp"]
+OutputResolution = Literal["512", "1K", "2K", "4K"]
 ExemplarRetrievalMode = Literal["external_only", "external_then_rerank"]
+
+# Models that support 512px resolution (Nano Banana 2 / Gemini 3.1 Flash Image)
+_MODELS_WITH_512 = {"gemini-3.1-flash-image", "gemini-3.1-flash-image-preview"}
 
 
 class VLMConfig(BaseSettings):
     """VLM provider configuration."""
 
     provider: str = "gemini"
-    model: str = "gemini-2.0-flash"
+    model: str = "gemini-3.1-pro-preview"
 
 
 class ImageConfig(BaseSettings):
@@ -32,7 +36,7 @@ class PipelineConfig(BaseSettings):
 
     num_retrieval_examples: int = 10
     refinement_iterations: int = 3
-    output_resolution: str = "2k"
+    output_resolution: OutputResolution = "2K"
     diagram_type: str = "methodology"
 
 
@@ -58,7 +62,7 @@ class Settings(BaseSettings):
 
     # Provider settings
     vlm_provider: str = Field(default="gemini", alias="VLM_PROVIDER")
-    vlm_model: str = Field(default="gemini-2.0-flash", alias="VLM_MODEL")
+    vlm_model: str = Field(default="gemini-3.1-pro-preview", alias="VLM_MODEL")
     image_provider: str = Field(default="google_imagen", alias="IMAGE_PROVIDER")
     image_model: str = Field(default="gemini-3-pro-image-preview", alias="IMAGE_MODEL")
 
@@ -68,7 +72,7 @@ class Settings(BaseSettings):
     auto_refine: bool = False
     max_iterations: int = 30
     optimize_inputs: bool = False
-    output_resolution: str = "2k"
+    output_resolution: OutputResolution = "2K"
     seed: Optional[int] = None
     exemplar_retrieval_enabled: bool = False
     exemplar_retrieval_endpoint: Optional[str] = None
@@ -92,6 +96,9 @@ class Settings(BaseSettings):
 
     # API Keys (loaded from environment)
     google_api_key: Optional[str] = Field(default=None, alias="GOOGLE_API_KEY")
+    google_service_account_json: Optional[str] = Field(
+        default=None, alias="GOOGLE_SERVICE_ACCOUNT_JSON"
+    )
     openrouter_api_key: Optional[str] = Field(default=None, alias="OPENROUTER_API_KEY")
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     anthropic_api_key: Optional[str] = Field(default=None, alias="ANTHROPIC_API_KEY")
@@ -150,6 +157,19 @@ class Settings(BaseSettings):
         if v not in ("png", "jpeg", "webp"):
             raise ValueError(f"output_format must be png, jpeg, or webp. Got: {v}")
         return v
+
+    @field_validator("output_resolution", mode="before")
+    @classmethod
+    def validate_output_resolution(cls, v: Any) -> str:
+        """Normalize and validate output_resolution (512, 1K, 2K, 4K)."""
+        if v is None:
+            return "2K"
+        v = str(v).upper().strip()
+        # Accept common aliases: "1k" -> "1K", "2k" -> "2K", "4k" -> "4K"
+        valid = {"512", "1K", "2K", "4K"}
+        if v in valid:
+            return v
+        raise ValueError(f"output_resolution must be one of {valid}. Got: {v}")
 
     @field_validator("exemplar_retrieval_top_k")
     @classmethod

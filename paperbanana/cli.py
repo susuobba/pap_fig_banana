@@ -110,6 +110,12 @@ def generate(
         "-ar",
         help="Target aspect ratio: 1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9",
     ),
+    resolution: Optional[str] = typer.Option(
+        None,
+        "--resolution",
+        "-r",
+        help="Output resolution: 512 (Nano Banana 2 only), 1K, 2K (default), 4K",
+    ),
     format: str = typer.Option(
         "png",
         "--format",
@@ -239,6 +245,8 @@ def generate(
         overrides["exemplar_retrieval_max_retries"] = exemplar_retries
     if seed is not None:
         overrides["seed"] = seed
+    if resolution is not None:
+        overrides["output_resolution"] = resolution
 
     if config:
         settings = Settings.from_yaml(config, **overrides)

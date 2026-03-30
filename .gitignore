@@ -8,7 +8,8 @@ build/
 *.egg
 
 # Environment
-.env
+.env*
+!.env.example
 .venv/
 venv/
 env/
@@ -44,6 +45,8 @@ paper.md
 # Credentials
 *.pem
 *.p12
+*.key
+*.keystore
 
 # Logs
 *.log
@@ -66,8 +69,7 @@ paper.md
 CLAUDE.md
 
 
+# Build / lint caches
 .ruff_cache/
 .pytest_cache/
-.venv/
-.env
-uv.lock
+.mypy_cache/

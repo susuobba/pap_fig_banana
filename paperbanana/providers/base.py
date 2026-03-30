@@ -90,6 +90,7 @@ class ImageGenProvider(ABC):
         height: int = 1024,
         seed: Optional[int] = None,
         aspect_ratio: Optional[str] = None,
+        output_resolution: Optional[str] = None,
     ) -> Image.Image:
         """Generate an image from a text prompt.
 
@@ -101,6 +102,9 @@ class ImageGenProvider(ABC):
             seed: Random seed for reproducibility.
             aspect_ratio: Target aspect ratio (1:1, 2:3, 3:2, 3:4, 4:3, 9:16, 16:9, 21:9).
                 takes precedence over width/height for providers that support it.
+            output_resolution: Target resolution for providers that support it.
+                Nano Banana Pro: "1K", "2K", "4K".
+                Nano Banana 2: "512", "1K", "2K", "4K".
 
         Returns:
             Generated PIL Image.

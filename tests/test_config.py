@@ -102,7 +102,7 @@ def test_effective_vlm_model_gemini_override():
     """Gemini VLM model override is used when provider is gemini."""
     settings = Settings(
         vlm_provider="gemini",
-        vlm_model="gemini-2.0-flash",
+        vlm_model="gemini-3.1-pro-preview",
         google_vlm_model="gemini-2.5-flash",
     )
     assert settings.effective_vlm_model == "gemini-2.5-flash"
