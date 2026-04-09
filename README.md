@@ -32,12 +32,14 @@
 > This project is **not affiliated with or endorsed by** the original authors or Google Research.
 > The implementation is based on the publicly available paper and may differ from the original system.
 
-An agentic framework for generating publication-quality academic diagrams and statistical plots from text descriptions. Supports OpenAI (GPT-5.2 + GPT-Image-1.5), Azure OpenAI / Foundry, and Google Gemini providers.
+An agentic framework for generating publication-quality academic diagrams and statistical plots from text descriptions. Supports Google Gemini (default), OpenAI (GPT-5.2 + GPT-Image-1.5), Azure OpenAI / Foundry, Anthropic Claude, and AWS Bedrock providers.
 
 - Two-phase multi-agent pipeline with iterative refinement
-- Multiple VLM and image generation providers (OpenAI, Azure, Gemini)
+- Multiple VLM and image generation providers (Gemini, OpenAI, Azure, Anthropic, Bedrock, OpenRouter)
+- **Google Service Account** and **Vertex AI** authentication support
 - Input optimization layer for better generation quality
 - Auto-refine mode and run continuation with user feedback
+- Configurable output resolution (512, 1K, 2K, 4K)
 - CLI, Python API, and MCP server for IDE integration
 - **Batch generation** from a manifest file (YAML/JSON) for multiple diagrams in one run
 - **PDF inputs** for methodology context (optional `paperbanana[pdf]` / PyMuPDF), with per-page selection
@@ -55,8 +57,9 @@ An agentic framework for generating publication-quality academic diagrams and st
 ### Prerequisites
 
 - Python 3.10+
-- An OpenAI API key ([platform.openai.com](https://platform.openai.com/api-keys)) or Azure OpenAI / Foundry endpoint
-- Or a Google Gemini API key (free, [Google AI Studio](https://makersuite.google.com/app/apikey))
+- A Google Gemini API key (free, [Google AI Studio](https://makersuite.google.com/app/apikey)) — default provider
+- Or an OpenAI API key ([platform.openai.com](https://platform.openai.com/api-keys)) / Azure OpenAI / Foundry endpoint
+- Or a Google Service Account JSON for Vertex AI
 
 ### Step 1: Install
 
@@ -77,8 +80,12 @@ pip install -e ".[dev,openai,google]"
 ```bash
 cp .env.example .env
 # Edit .env and add your API key:
-#   OPENAI_API_KEY=your-key-here
-#   GOOGLE_API_KEY=your-key-here
+#   GOOGLE_API_KEY=your-key-here          # Default provider (Gemini)
+#   OPENAI_API_KEY=your-key-here          # Alternative (OpenAI)
+#
+# For Google Service Account / Vertex AI:
+#   GOOGLE_SERVICE_ACCOUNT_JSON=/path/to/service-account.json
+#   GOOGLE_VERTEXAI=true
 #
 # For Azure OpenAI / Foundry:
 #   OPENAI_BASE_URL=https://<resource>.openai.azure.com/openai/v1
@@ -155,13 +162,24 @@ PaperBanana supports multiple VLM and image generation providers:
 
 | Component | Provider | Model | Notes |
 |-----------|----------|-------|-------|
-| VLM (planning, critique) | OpenAI | `gpt-5.2` | Default |
-| Image Generation | OpenAI | `gpt-image-1.5` | Default |
-| VLM | Google Gemini | `gemini-2.0-flash` | Free tier |
-| Image Generation | Google Gemini | `gemini-3-pro-image-preview` | Free tier |
+| VLM (planning, critique) | Google Gemini | `gemini-3.1-pro-preview` | Default |
+| Image Generation | Google Gemini | `gemini-3-pro-image-preview` | Default |
+| VLM | OpenAI | `gpt-5.2` | Alternative |
+| Image Generation | OpenAI | `gpt-image-1.5` | Alternative |
+| VLM | Anthropic | Claude models | Via `ANTHROPIC_API_KEY` |
+| VLM / Image | AWS Bedrock | Any supported model | Via AWS credentials |
 | VLM / Image | OpenRouter | Any supported model | Flexible routing |
 
-Azure OpenAI / Foundry endpoints are auto-detected — set `OPENAI_BASE_URL` to your endpoint.
+### Authentication methods
+
+| Method | Environment Variable | Notes |
+|--------|---------------------|-------|
+| Google API Key | `GOOGLE_API_KEY` | Free tier, default |
+| Google Service Account | `GOOGLE_SERVICE_ACCOUNT_JSON` | Path to JSON key file |
+| Google Vertex AI | `GOOGLE_VERTEXAI=true` | Uses API key with Vertex AI backend |
+| OpenAI / Azure | `OPENAI_API_KEY` + `OPENAI_BASE_URL` | Azure auto-detected |
+| AWS Bedrock | `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | Or IAM role / `~/.aws/credentials` |
+
 Gemini-compatible gateways are also supported — set `GOOGLE_BASE_URL` when needed.
 
 ---
@@ -340,10 +358,10 @@ from paperbanana import PaperBananaPipeline, GenerationInput, DiagramType
 from paperbanana.core.config import Settings
 
 settings = Settings(
-    vlm_provider="openai",
-    vlm_model="gpt-5.2",
-    image_provider="openai_imagen",
-    image_model="gpt-image-1.5",
+    vlm_provider="gemini",
+    vlm_model="gemini-3.1-pro-preview",
+    image_provider="google_imagen",
+    image_model="gemini-3-pro-image-preview",
     optimize_inputs=True,   # Enable input optimization
     auto_refine=True,       # Loop until critic is satisfied
 )
@@ -396,7 +414,19 @@ PaperBanana includes an MCP server for use with Claude Code, Cursor, or any MCP-
 }
 ```
 
-Three MCP tools are exposed: `generate_diagram`, `generate_plot`, and `evaluate_diagram`.
+Eight MCP tools are exposed:
+
+**Autonomous tools** (full pipeline runs internally):
+- `generate_diagram` — Generate a methodology diagram from text
+- `generate_plot` — Generate a statistical plot from JSON data
+- `evaluate_diagram` — Evaluate a generated diagram against a reference
+- `download_references` — Download expanded reference set (~294 examples)
+
+**Orchestrated tools** (external LLM acts as VLM, only image gen runs here):
+- `render_image` — Render an image from a detailed description (Visualizer only)
+- `critique_image` — Have the internal VLM critique a generated image
+- `load_guidelines` — Load aesthetic guidelines for diagram styling
+- `list_references` — List available reference examples for in-context learning
 
 The repo also ships with 3 Claude Code skills:
 - `/generate-diagram <file> [caption]` - generate a methodology diagram from a text file
@@ -422,12 +452,12 @@ Key settings:
 
 ```yaml
 vlm:
-  provider: openai           # openai, gemini, or openrouter
-  model: gpt-5.2
+  provider: gemini           # gemini, openai, openrouter, bedrock, or anthropic
+  model: gemini-2.0-flash
 
 image:
-  provider: openai_imagen    # openai_imagen, google_imagen, or openrouter_imagen
-  model: gpt-image-1.5
+  provider: google_imagen    # google_imagen, openai_imagen, openrouter_imagen, or bedrock_imagen
+  model: gemini-3-pro-image-preview
 
 pipeline:
   num_retrieval_examples: 10
@@ -435,31 +465,46 @@ pipeline:
   # auto_refine: true        # Loop until critic is satisfied
   # max_iterations: 30       # Safety cap for auto_refine mode
   # optimize_inputs: true    # Preprocess inputs for better generation
-  output_resolution: "2k"
+  output_resolution: "2K"   # 512 (Nano Banana 2 only), 1K, 2K, 4K
 
 reference:
   path: data/reference_sets
+  guidelines_path: data/guidelines
 
 output:
   dir: outputs
   save_iterations: true
+  save_prompts: true
   save_metadata: true
 ```
 
 Environment variables (`.env`):
 
 ```bash
-# OpenAI (default)
-OPENAI_API_KEY=your-key
-OPENAI_BASE_URL=https://api.openai.com/v1    # or Azure endpoint
-OPENAI_VLM_MODEL=gpt-5.2                      # override model
-OPENAI_IMAGE_MODEL=gpt-image-1.5              # override model
-
-# Google Gemini (alternative, free)
+# Google Gemini (default, free)
 GOOGLE_API_KEY=your-key
-GOOGLE_BASE_URL=                            # optional custom Gemini-compatible endpoint
-GOOGLE_VLM_MODEL=gemini-2.0-flash          # override Gemini VLM model
+GOOGLE_BASE_URL=                               # optional custom Gemini-compatible endpoint
+GOOGLE_VLM_MODEL=gemini-2.0-flash              # override Gemini VLM model
 GOOGLE_IMAGE_MODEL=gemini-3-pro-image-preview  # override Gemini image model
+
+# Google Service Account (alternative auth)
+GOOGLE_SERVICE_ACCOUNT_JSON=/path/to/service-account.json
+
+# Google Vertex AI
+GOOGLE_VERTEXAI=true                           # enable Vertex AI backend
+
+# OpenAI (alternative)
+OPENAI_API_KEY=your-key
+OPENAI_BASE_URL=https://api.openai.com/v1      # or Azure endpoint
+OPENAI_VLM_MODEL=gpt-5.2                       # override model
+OPENAI_IMAGE_MODEL=gpt-image-1.5               # override model
+
+# Anthropic
+ANTHROPIC_API_KEY=your-key
+
+# AWS Bedrock
+AWS_REGION=us-east-1
+AWS_PROFILE=                                    # optional AWS profile name
 ```
 
 ---
@@ -472,8 +517,8 @@ paperbanana/
 │   ├── core/          # Pipeline orchestration, types, config, resume, utilities
 │   ├── agents/        # Optimizer, Retriever, Planner, Stylist, Visualizer, Critic
 │   ├── providers/     # VLM and image gen provider implementations
-│   │   ├── vlm/       # OpenAI, Gemini, OpenRouter VLM providers
-│   │   └── image_gen/ # OpenAI, Gemini, OpenRouter image gen providers
+│   │   ├── vlm/       # Gemini, OpenAI, Anthropic, Bedrock, OpenRouter VLM providers
+│   │   └── image_gen/ # Gemini, OpenAI, Bedrock, OpenRouter image gen providers
 │   ├── reference/     # Reference set management (13 curated examples)
 │   ├── guidelines/    # Style guidelines loader
 │   └── evaluation/    # VLM-as-Judge evaluation system
