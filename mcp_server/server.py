@@ -532,14 +532,16 @@ async def list_references(
             "count": 0,
         })
 
-    examples = dm.load_examples()
+    with open(dm.index_path, encoding="utf-8") as f:
+        data = json.load(f)
+    examples = data.get("examples", [])
     items = []
     for ex in examples[:max_items]:
         items.append({
-            "id": ex.id,
-            "caption": ex.caption,
-            "category": ex.category,
-            "image_path": ex.image_path,
+            "id": ex.get("id", ""),
+            "caption": ex.get("caption", ""),
+            "category": ex.get("category", ""),
+            "image_path": ex.get("image_path", ""),
         })
 
     return json.dumps({

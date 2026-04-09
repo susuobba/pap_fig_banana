@@ -103,6 +103,7 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     anthropic_api_key: Optional[str] = Field(default=None, alias="ANTHROPIC_API_KEY")
     google_base_url: Optional[str] = Field(default=None, alias="GOOGLE_BASE_URL")
+    google_vertexai: bool = Field(default=False, alias="GOOGLE_VERTEXAI")
     google_vlm_model: Optional[str] = Field(default=None, alias="GOOGLE_VLM_MODEL")
     google_image_model: Optional[str] = Field(default=None, alias="GOOGLE_IMAGE_MODEL")
     openai_base_url: str = Field(default="https://api.openai.com/v1", alias="OPENAI_BASE_URL")

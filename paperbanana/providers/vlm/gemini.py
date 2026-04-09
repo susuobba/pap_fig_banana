@@ -32,11 +32,13 @@ class GeminiVLM(VLMProvider):
         model: str,
         base_url: Optional[str] = None,
         credentials: Optional[object] = None,
+        vertexai: bool = False,
     ):
         self._api_key = api_key
         self._model = model
         self._base_url = base_url
         self._credentials = credentials
+        self._vertexai = vertexai
         self._client = None
 
     @property
@@ -53,6 +55,8 @@ class GeminiVLM(VLMProvider):
                 from google import genai
 
                 client_kwargs: dict = {}
+                if self._vertexai:
+                    client_kwargs["vertexai"] = True
                 if self._credentials:
                     client_kwargs["credentials"] = self._credentials
                 elif self._api_key:

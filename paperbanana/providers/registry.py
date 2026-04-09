@@ -114,6 +114,14 @@ class ProviderRegistry:
         if provider == "gemini":
             from paperbanana.providers.vlm.gemini import GeminiVLM
 
+            if settings.google_vertexai:
+                _validate_api_key(settings.google_api_key, "GOOGLE_API_KEY")
+                return GeminiVLM(
+                    api_key=settings.google_api_key,
+                    model=settings.google_vlm_model or settings.vlm_model,
+                    base_url=settings.google_base_url,
+                    vertexai=True,
+                )
             creds = _load_google_credentials(settings.google_service_account_json)
             if creds is None:
                 _validate_api_key(settings.google_api_key, "GOOGLE_API_KEY")
@@ -172,6 +180,14 @@ class ProviderRegistry:
         if provider == "google_imagen":
             from paperbanana.providers.image_gen.google_imagen import GoogleImagenGen
 
+            if settings.google_vertexai:
+                _validate_api_key(settings.google_api_key, "GOOGLE_API_KEY")
+                return GoogleImagenGen(
+                    api_key=settings.google_api_key,
+                    model=settings.google_image_model or settings.image_model,
+                    base_url=settings.google_base_url,
+                    vertexai=True,
+                )
             creds = _load_google_credentials(settings.google_service_account_json)
             if creds is None:
                 _validate_api_key(settings.google_api_key, "GOOGLE_API_KEY")
